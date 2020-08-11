@@ -1,114 +1,111 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- * @flow strict-local
- */
-
-import React from 'react';
+import React, {Component} from 'react';
 import {
-  SafeAreaView,
   StyleSheet,
-  ScrollView,
-  View,
   Text,
-  StatusBar,
+  View,
+  NativeModules,
+  Linking,
+  NativeEventEmitter,
 } from 'react-native';
+import {RNRemoteMessage, RNErrorEnum} from '@hmscore/react-native-hwpush';
 
-import {
-  Header,
-  LearnMoreLinks,
-  Colors,
-  DebugInstructions,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+import * as R from 'ramda';
 
-const App: () => React$Node = () => {
-  return (
-    <>
-      <StatusBar barStyle="dark-content" />
-      <SafeAreaView>
-        <ScrollView
-          contentInsetAdjustmentBehavior="automatic"
-          style={styles.scrollView}>
-          <Header />
-          {global.HermesInternal == null ? null : (
-            <View style={styles.engine}>
-              <Text style={styles.footer}>Engine: Hermes</Text>
-            </View>
-          )}
-          <View style={styles.body}>
-            <View style={styles.sectionContainer}>
-              <Text style={styles.sectionTitle}>Step One</Text>
-              <Text style={styles.sectionDescription}>
-                Edit <Text style={styles.highlight}>App.js</Text> to change this
-                screen and then come back to see your edits.
-              </Text>
-            </View>
-            <View style={styles.sectionContainer}>
-              <Text style={styles.sectionTitle}>See Your Changes</Text>
-              <Text style={styles.sectionDescription}>
-                <ReloadInstructions />
-              </Text>
-            </View>
-            <View style={styles.sectionContainer}>
-              <Text style={styles.sectionTitle}>Debug</Text>
-              <Text style={styles.sectionDescription}>
-                <DebugInstructions />
-              </Text>
-            </View>
-            <View style={styles.sectionContainer}>
-              <Text style={styles.sectionTitle}>Learn More</Text>
-              <Text style={styles.sectionDescription}>
-                Read the docs to discover what to do next:
-              </Text>
-            </View>
-            <LearnMoreLinks />
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    </>
-  );
-};
+export class App extends Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      displayText: 'Waiting for Token...',
+    };
+  }
 
-const styles = StyleSheet.create({
-  scrollView: {
-    backgroundColor: Colors.lighter,
-  },
-  engine: {
-    position: 'absolute',
-    right: 0,
-  },
-  body: {
-    backgroundColor: Colors.white,
-  },
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: Colors.black,
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-    color: Colors.dark,
-  },
-  highlight: {
-    fontWeight: '700',
-  },
-  footer: {
-    color: Colors.dark,
-    fontSize: 12,
-    fontWeight: '600',
-    padding: 4,
-    paddingRight: 12,
-    textAlign: 'right',
-  },
-});
+  componentDidMount() {
+    const eventTokenEmitter = new NativeEventEmitter(
+      NativeModules.ToastExample,
+    );
+    this.listenerToken = eventTokenEmitter.addListener(
+      'PushTokenMsgReceiverEvent',
+      (event) => {
+        console.log('log received token:' + event.token + '\n');
+        this.setState({
+          displayText: event.token,
+        });
+      },
+    );
+    this.getToken();
+    this.initPushMessageListener();
+    this.onMessage();
+  }
+  getToken() {
+    NativeModules.RNHmsInstanceId.getToken((result, token) => {
+      const displayText =
+        result === '0' ? token : 'Token registration failed, please restart.';
+      console.log(JSON.stringify(token));
+      this.setState({
+        displayText,
+      });
+    });
+  }
+  initPushMessageListener() {
+    const eventEmitter = new NativeEventEmitter(NativeModules.ToastExample);
+    this.listenerPushMsg = eventEmitter.addListener(
+      'PushMsgReceiverEvent',
+      (event) => {
+        const message = new RNRemoteMessage(event.msg);
+        this.handleData(JSON.parse(message.getData()));
+      },
+    );
+  }
+  onMessage = () => {
+    let emitter = new NativeEventEmitter();
+    listener = emitter.addListener('PushMsgReceiverEvent', (event) => {
+      console.log(JSON.stringify(event));
+    });
+  };
+  Subscribe = () => {
+    NativeModules.RNHmsMessaging.subscribe('myTopic', (result, errinfo) => {
+      if (result == RNErrorEnum.SUCCESS) {
+        console.log('Subscribed!');
+      } else {
+        console.log('Failed to subscribe : ' + errinfo);
+      }
+    });
+  };
+  unSuscribe = () => {
+    NativeModules.RNHmsMessaging.unsubscribe('myTopic', (result, errinfo) => {
+      if (result == RNErrorEnum.SUCCESS) {
+        console.log('Unsubscribed!');
+      } else {
+        console.log('Failed to unsubscribe : ' + errinfo);
+      }
+    });
+  };
+  onMessageReceived(message) {
+    this.setState({
+      displayText: message,
+    });
+  }
+
+  handleData(data) {
+    const message = R.propOr(false, 'message', data);
+
+    if (message) this.onMessageReceived(message);
+  }
+  render() {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: 'aqua',
+        }}>
+        <Text>{this.state.displayText}</Text>
+      </View>
+    );
+  }
+}
 
 export default App;
+
+const styles = StyleSheet.create({});
